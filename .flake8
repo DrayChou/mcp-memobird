@@ -1,0 +1,3 @@
+[flake8]
+max-line-length = 512
+ignore = E501  # 如果希望完全忽略行长度报错（不推荐）

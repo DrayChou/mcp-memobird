@@ -1,0 +1,14 @@
+# 核心依赖
+mcp>=0.1.0
+Pillow>=10.0.0
+requests>=2.30.0
+
+# 用于图像处理
+numpy>=1.24.0
+
+# 用于 SSE 模式
+starlette>=0.30.0
+uvicorn>=0.23.0
+
+# 日志记录
+python-json-logger>=2.0.7
