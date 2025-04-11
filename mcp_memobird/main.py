@@ -1,24 +1,21 @@
 import os
 import argparse
-import sys  # Import sys for exit
+import sys
 import base64
 from io import BytesIO
 
-# Import from local client file
+# 从本地包中导入客户端类和异常
 try:
-    # Import new classes and exceptions from local client
-    from memobird_client import (
+    from mcp_memobird.client import (
         MemobirdDevice,
         ApiError,
         NetworkError,
         ContentError,
         MemobirdError,
     )
-
-    # requests import no longer needed here for exceptions
 except ImportError:
     print(
-        "Error: memobird_client.py not found or missing dependencies (Pillow, requests)."
+        "Error: mcp_memobird.client module not found or missing dependencies (Pillow, requests)."
     )
     sys.exit(1)
 
@@ -236,8 +233,11 @@ async def handle_sse(request: Request):
         # but often the connection might already be closed.
 
 
-# --- Main Execution Logic ---
-if __name__ == "__main__":
+def main():
+    """
+    Main entry point for the MCP Memobird server. Can be called as a module via `python -m mcp_memobird`
+    or directly as a script.
+    """
     parser = argparse.ArgumentParser(description=f"Start the {SERVER_NAME} MCP Server")
     parser.add_argument(
         "--transport",
@@ -320,6 +320,7 @@ if __name__ == "__main__":
             sys.exit(1)
 
         print(f"Starting server with SSE transport on port {args.port}...")
+        global sse_transport
         sse_transport = SseServerTransport("/messages")  # Initialize here
 
         routes = [
@@ -349,3 +350,7 @@ if __name__ == "__main__":
         # Should not happen due to argparse choices
         print(f"Error: Invalid transport type '{args.transport}'")
         sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
