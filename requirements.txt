@@ -1,14 +1,14 @@
 # 核心依赖
-mcp>=0.1.0
-Pillow>=10.0.0
-requests>=2.30.0
+fastmcp>=0.4.2      # MCP 服务实现
+Pillow>=10.0.0      # 图像处理库
+requests>=2.30.0    # HTTP 客户端库
 
-# 用于图像处理
-numpy>=1.24.0
+# 图像处理支持
+numpy>=1.24.0       # 用于高级图像处理
 
-# 用于 SSE 模式
-starlette>=0.30.0
-uvicorn>=0.23.0
+# SSE 传输模式依赖
+starlette>=0.30.0   # ASGI 框架
+uvicorn>=0.23.0     # ASGI 服务器
 
 # 日志记录
-python-json-logger>=2.0.7
+python-json-logger>=2.0.7  # JSON 格式日志

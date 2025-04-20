@@ -7,64 +7,51 @@ from typing import List, Tuple, Union, Optional, Any
 import requests
 from PIL import Image, UnidentifiedImageError
 
-# Setup basic logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# 导入配置
+from src.config import MEMOBIRD_API_BASE_URL, DEFAULT_REQUEST_TIMEOUT, IMAGE_MAX_WIDTH, LOG_LEVEL, LOG_FORMAT
+
+# 设置日志
+logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 log = logging.getLogger(__name__)
 
-# --- Constants ---
-MEMOBIRD_API_BASE_URL = "http://open.memobird.cn/home"
-DEFAULT_REQUEST_TIMEOUT = 15  # seconds
-IMAGE_MAX_WIDTH = 384
-
-
-# --- Helper Functions ---
+# --- 辅助函数 ---
 def _current_timestamp() -> str:
-    """Returns the current timestamp in the format required by the API."""
+    """返回API要求格式的当前时间戳"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# --- Custom Exceptions ---
+# --- 自定义异常 ---
 class MemobirdError(Exception):
-    """Base exception for Memobird client errors."""
-
+    """Memobird客户端错误的基类"""
     pass
 
 
 class ApiError(MemobirdError):
-    """Custom exception for Memobird API errors."""
-
-    def __init__(
-        self, res_code: int, res_error: str, status_code: Optional[int] = None
-    ):
+    """API错误"""
+    def __init__(self, res_code: int, res_error: str, status_code: Optional[int] = None):
         self.res_code = res_code
         self.res_error = res_error
         self.status_code = status_code
-        super().__init__(
-            f"API Error (HTTP Status: {status_code}, API Code: {res_code}): {res_error}"
-        )
+        super().__init__(f"API Error (HTTP Status: {status_code}, API Code: {res_code}): {res_error}")
 
 
 class NetworkError(MemobirdError):
-    """Custom exception for network-related errors during API calls."""
-
+    """网络相关错误"""
     pass
 
 
 class ContentError(MemobirdError):
-    """Custom exception for errors related to content processing (e.g., image handling)."""
-
+    """内容处理错误"""
     pass
 
 
-# --- API Response Handling ---
+# --- API响应处理 ---
 def _check_api_response(resp: requests.Response) -> dict:
-    """Checks the API response for errors and returns JSON data on success."""
+    """检查API响应是否有错误，成功则返回JSON数据"""
     try:
-        resp.raise_for_status()  # Raise HTTPError for bad status codes (4xx or 5xx)
+        resp.raise_for_status()  # 抛出HTTP错误（4xx或5xx）
         data = resp.json()
-        # API success code is 1
+        # API成功代码为1
         if data.get("showapi_res_code") != 1:
             raise ApiError(
                 res_code=data.get("showapi_res_code", -1),
@@ -73,14 +60,12 @@ def _check_api_response(resp: requests.Response) -> dict:
             )
         return data
     except requests.exceptions.HTTPError as e:
-        # Include response text for better debugging if possible
+        # 包含响应文本以便于调试
         response_text = ""
         try:
-            response_text = (
-                f" Response: {resp.text[:200]}..."  # Limit response text length
-            )
+            response_text = f" Response: {resp.text[:200]}..."  # 限制响应文本长度
         except Exception:
-            pass  # Ignore errors reading response text
+            pass  # 忽略读取响应文本的错误
         raise NetworkError(f"HTTP Error: {e}.{response_text}") from e
     except requests.exceptions.JSONDecodeError as e:
         raise ApiError(
@@ -89,61 +74,53 @@ def _check_api_response(resp: requests.Response) -> dict:
             status_code=resp.status_code,
         )
     except requests.exceptions.RequestException as e:
-        # Catch other potential requests errors (timeout, connection error, etc.)
+        # 捕获其他潜在的请求错误（超时、连接错误等）
         raise NetworkError(f"Network request failed: {e}") from e
 
 
-# --- Content Builder ---
+# --- 内容构建器 ---
 class PrintPayloadBuilder:
-    """Builds the payload string for printing text and images."""
+    """构建用于打印文本和图像的有效载荷字符串"""
 
     def __init__(self):
         self._parts: List[Tuple[str, Union[str, bytes]]] = []
 
     def add_text(self, text: str):
-        """Adds a text part."""
+        """添加文本部分"""
         if not isinstance(text, str):
             raise TypeError("Text content must be a string.")
         log.debug("Adding text part.")
         self._parts.append(("T", text))
-        return self  # Allow chaining
+        return self  # 允许链式调用
 
     def add_image(self, image_source: Union[str, BytesIO, Image.Image]):
         """
-        Adds an image part. Processes the image for printing.
-        :param image_source: Path to image file, BytesIO object, or PIL Image object.
+        添加图像部分。处理图像以供打印。
+        :param image_source: 图像文件路径、BytesIO对象或PIL Image对象。
         """
         log.debug(f"Adding image part from source type: {type(image_source)}")
         try:
             if isinstance(image_source, Image.Image):
                 image = image_source
             else:
-                # Handles path (str) or BytesIO
+                # 处理路径（str）或BytesIO
                 image = Image.open(image_source)
 
-            # Ensure image is in RGB mode before potentially converting to 1-bit
-            # This helps avoid issues with palette transparency or other modes
+            # 确保图像为RGB模式，然后再转换为1位黑白
             if image.mode != "RGB":
                 image = image.convert("RGB")
 
-            # Optional: Flip image if needed (seems device-dependent, test without first)
-            # image = image.transpose(Image.FLIP_TOP_BOTTOM)
-
-            # Resize if wider than max width
+            # 如果宽度大于最大宽度，则调整大小
             width, height = image.size
             if width > IMAGE_MAX_WIDTH:
                 new_height = int(height * IMAGE_MAX_WIDTH / width)
-                log.info(
-                    f"Resizing image from {width}x{height} to {IMAGE_MAX_WIDTH}x{new_height}"
-                )
-                image = image.resize(
-                    (IMAGE_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
-                )
+                log.info(f"Resizing image from {width}x{height} to {IMAGE_MAX_WIDTH}x{new_height}")
+                image = image.resize((IMAGE_MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
 
-            # Convert to 1-bit black and white
+            # 转换为1位黑白
             image = image.convert("1")
 
-            # Save to BMP format in memory
+            # 在内存中保存为BMP格式
             with BytesIO() as buffer:
                 image.save(buffer, "BMP")
                 image_bytes = buffer.getvalue()
@@ -154,57 +131,49 @@ class PrintPayloadBuilder:
         except FileNotFoundError as e:
             raise ContentError(f"Image file not found: {image_source}") from e
         except UnidentifiedImageError as e:
-            raise ContentError(
-                f"Cannot identify image file: {e}. Source: {image_source}"
-            ) from e
+            raise ContentError(f"Cannot identify image file: {e}. Source: {image_source}") from e
         except Exception as e:
-            # Catch other PIL/IO errors
+            # 捕获其他PIL/IO错误
             raise ContentError(f"Error processing image: {e}") from e
 
-        return self  # Allow chaining
+        return self  # 允许链式调用
 
     def build(self) -> str:
-        """Encodes all parts into the pipe-separated Base64 string."""
+        """将所有部分编码为用管道分隔的Base64字符串"""
         encoded_parts: List[str] = []
         num_parts = len(self._parts)
 
         for index, (content_type, data) in enumerate(self._parts):
-            encoded_data = ""
             try:
                 if content_type == "T":
                     text_data = data
-                    # Ensure text ends with newline if not the last part
+                    # 确保文本以换行符结尾（如果不是最后一部分）
                     if index < num_parts - 1 and not text_data.endswith("\n"):
                         text_data += "\n"
-                    # Encode text using GBK as required by the API
-                    encoded_data = base64.b64encode(
-                        text_data.encode("GBK", errors="ignore")
-                    ).decode("ascii")
+                    # 使用GBK编码文本（API要求）
+                    encoded_data = base64.b64encode(text_data.encode("GBK", errors="ignore")).decode("ascii")
                     encoded_parts.append(f"T:{encoded_data}")
                 elif content_type == "P":
-                    # Encode image BMP bytes
+                    # 编码图像BMP字节
                     encoded_data = base64.b64encode(data).decode("ascii")
                     encoded_parts.append(f"P:{encoded_data}")
             except Exception as e:
-                log.error(
-                    f"Error encoding part (Type: {content_type}): {e}. Skipping part."
-                )
-                # Optionally raise ContentError here instead of just logging
+                log.error(f"Error encoding part (Type: {content_type}): {e}. Skipping part.")
 
         payload = "|".join(encoded_parts)
         log.debug(f"Built payload string (length: {len(payload)}): {payload[:50]}...")
         return payload
 
 
-# --- API Client ---
+# --- API客户端 ---
 class MemobirdApiClient:
-    """Handles direct communication with the Memobird API."""
+    """处理与Memobird API的直接通信"""
 
     def __init__(self, ak: str, session: Optional[requests.Session] = None):
         if not ak:
             raise ValueError("Memobird API Key (ak) cannot be empty.")
         self._ak = ak
-        # Use provided session or create a new one
+        # 使用提供的会话或创建新会话
         self._session = session if session else requests.Session()
         self._headers = {
             "Content-Type": "application/json",
@@ -212,19 +181,11 @@ class MemobirdApiClient:
         }
         log.info("MemobirdApiClient initialized.")
 
-    def _make_request(
-        self,
-        method: str,
-        path: str,
-        params: Optional[dict] = None,
-        json_data: Optional[dict] = None,
-        timeout: int = DEFAULT_REQUEST_TIMEOUT,
-    ) -> dict:
-        """Makes an HTTP request to the Memobird API and handles response."""
+    def _make_request(self, method: str, path: str, params: Optional[dict] = None,
+                     json_data: Optional[dict] = None, timeout: int = DEFAULT_REQUEST_TIMEOUT) -> dict:
+        """向Memobird API发出HTTP请求并处理响应"""
         url = MEMOBIRD_API_BASE_URL + path
-        log.debug(
-            f"Making {method} request to {url} with params={params}, json={json_data}"
-        )
+        log.debug(f"Making {method} request to {url} with params={params}, json={json_data}")
         try:
             resp = self._session.request(
                 method=method,
@@ -234,14 +195,14 @@ class MemobirdApiClient:
                 headers=self._headers,
                 timeout=timeout,
             )
-            return _check_api_response(resp)  # Returns JSON data on success
-        except MemobirdError:  # Re-raise our specific errors
+            return _check_api_response(resp)  # 成功时返回JSON数据
+        except MemobirdError:  # 重新抛出我们的特定错误
             raise
-        except Exception as e:  # Catch unexpected errors during request
+        except Exception as e:  # 捕获请求期间的意外错误
             raise NetworkError(f"Unexpected error during API request: {e}") from e
 
     def get_user_id(self, device_id: str, user_identifying: str = "") -> str:
-        """Binds a user to a device and retrieves the user ID."""
+        """将用户绑定到设备并检索用户ID"""
         path = "/setuserbind"
         params = {
             "ak": self._ak,
@@ -260,10 +221,8 @@ class MemobirdApiClient:
         log.info(f"Obtained user ID: {user_id}")
         return user_id
 
-    def print_content(
-        self, device_id: str, user_id: str, payload: PrintPayloadBuilder
-    ) -> int:
-        """Sends content payload to the printer API."""
+    def print_content(self, device_id: str, user_id: str, payload: PrintPayloadBuilder) -> int:
+        """将内容有效载荷发送到打印机API"""
         path = "/printpaper"
         content_string = payload.build()
         if not content_string:
@@ -278,9 +237,7 @@ class MemobirdApiClient:
             "userID": user_id,
         }
         log.info(f"Sending content to device {device_id} (User: {user_id})...")
-        api_data = self._make_request(
-            "POST", path, json_data=json_data, timeout=20
-        )  # Longer timeout for printing
+        api_data = self._make_request("POST", path, json_data=json_data, timeout=20)  # 打印时超时更长
         content_id = api_data.get("printcontentid")
         if content_id is None:
             raise ApiError(
@@ -288,10 +245,10 @@ class MemobirdApiClient:
                 "Content ID not found in successful print API response.",
             )
         log.info(f"Print request successful. Content ID: {content_id}")
-        return int(content_id)  # API returns int
+        return int(content_id)  # API返回int
 
     def print_url(self, device_id: str, user_id: str, url: str) -> int:
-        """Prints content from a URL."""
+        """打印URL的内容"""
         path = "/printpaperFromUrl"
         json_data = {
             "ak": self._ak,
@@ -301,9 +258,7 @@ class MemobirdApiClient:
             "userID": user_id,
         }
         log.info(f"Sending URL {url} to device {device_id} (User: {user_id})...")
-        api_data = self._make_request(
-            "POST", path, json_data=json_data, timeout=30
-        )  # Longer timeout for URL printing
+        api_data = self._make_request("POST", path, json_data=json_data, timeout=30)  # URL打印时超时更长
         content_id = api_data.get("printcontentid")
         if content_id is None:
             raise ApiError(
@@ -314,7 +269,7 @@ class MemobirdApiClient:
         return int(content_id)
 
     def check_print_status(self, content_id: int) -> bool:
-        """Checks the print status of a specific content ID."""
+        """检查特定内容ID的打印状态"""
         path = "/getprintstatus"
         params = {
             "ak": self._ak,
@@ -324,52 +279,50 @@ class MemobirdApiClient:
         log.info(f"Checking print status for Content ID: {content_id}...")
         api_data = self._make_request("GET", path, params=params)
         is_printed = api_data.get("printflag") == 1
-        log.info(
-            f"Print status for {content_id}: {'Printed' if is_printed else 'Not Printed/Pending'}"
-        )
+        log.info(f"Print status for {content_id}: {'Printed' if is_printed else 'Not Printed/Pending'}")
         return is_printed
 
 
-# --- Device Interface ---
+# --- 设备接口 ---
 class MemobirdDevice:
-    """Simplified interface for controlling a single Memobird device."""
+    """控制单个Memobird设备的简化接口"""
 
     def __init__(self, ak: str, device_id: str, user_identifying: str = ""):
         log.info(f"Initializing MemobirdDevice for device: {device_id}...")
-        self._client = MemobirdApiClient(ak)  # Can raise ValueError
+        self._client = MemobirdApiClient(ak)  # 可能抛出ValueError
         self.device_id = device_id
-        # get_user_id can raise ApiError or NetworkError
+        # get_user_id可能抛出ApiError或NetworkError
         self.user_id = self._client.get_user_id(self.device_id, user_identifying)
         log.info(f"MemobirdDevice initialized for User ID: {self.user_id}.")
 
     def print_text(self, text: str) -> int:
-        """Prints text to the configured device."""
+        """在配置的设备上打印文本"""
         payload = PrintPayloadBuilder().add_text(text)
-        # print_content can raise ApiError, NetworkError, ContentError
+        # print_content可能抛出ApiError、NetworkError、ContentError
         return self._client.print_content(self.device_id, self.user_id, payload)
 
     def print_image(self, image_source: Union[str, BytesIO, Image.Image]) -> int:
-        """Prints an image to the configured device."""
+        """在配置的设备上打印图像"""
         try:
             payload = PrintPayloadBuilder().add_image(image_source)
-            # print_content can raise ApiError, NetworkError
+            # print_content可能抛出ApiError、NetworkError
             return self._client.print_content(self.device_id, self.user_id, payload)
         except ContentError as e:
-            # Log and re-raise or handle as needed
+            # 记录并重新抛出
             log.error(f"Failed to prepare image for printing: {e}")
             raise
 
     def print_payload(self, payload: PrintPayloadBuilder) -> int:
-        """Prints a pre-built payload with multiple parts."""
-        # print_content can raise ApiError, NetworkError, ContentError (if build fails)
+        """打印预构建的有多个部分的有效载荷"""
+        # print_content可能抛出ApiError、NetworkError、ContentError（如果构建失败）
         return self._client.print_content(self.device_id, self.user_id, payload)
 
     def print_url(self, url: str) -> int:
-        """Prints content from a URL to the configured device."""
-        # print_url can raise ApiError, NetworkError
+        """在配置的设备上打印URL的内容"""
+        # print_url可能抛出ApiError、NetworkError
         return self._client.print_url(self.device_id, self.user_id, url)
 
     def check_print_status(self, content_id: int) -> bool:
-        """Checks print status for the configured device."""
-        # check_print_status can raise ApiError, NetworkError
+        """检查配置设备的打印状态"""
+        # check_print_status可能抛出ApiError、NetworkError
         return self._client.check_print_status(content_id)

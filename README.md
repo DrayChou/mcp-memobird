@@ -22,7 +22,7 @@
 2. 从本地安装（开发模式）：
 
 ```bash
-git clone https://github.com/your-username/mcp-memobird.git
+git clone https://github.com/DrayChou/mcp-memobird.git
 cd mcp-memobird
 uv pip install -e .
 ```
@@ -30,13 +30,13 @@ uv pip install -e .
 3. 或直接从 Git 仓库安装：
 
 ```bash
-uv pip install git+https://github.com/your-username/mcp-memobird.git
+uv pip install git+https://github.com/DrayChou/mcp-memobird.git
 ```
 
 ### 使用传统 pip 安装
 
 ```bash
-git clone https://github.com/your-username/mcp-memobird.git
+git clone https://github.com/DrayChou/mcp-memobird.git
 cd mcp-memobird
 pip install -e .
 ```
@@ -49,6 +49,10 @@ pip install -e .
 - 咕咕机 API 密钥 (AK)
 - 设备 ID (通过连续按设备两次获取)
 
+可以通过以下两种方式配置：
+1. 命令行参数：`--ak` 和 `--did`
+2. 环境变量：`MEMOBIRD_AK` 和 `MEMOBIRD_DEVICE_ID`
+
 ### 启动服务器
 
 安装后可以通过以下方式启动：
@@ -58,7 +62,7 @@ pip install -e .
 mcp-memobird --ak YOUR_MEMOBIRD_AK --did YOUR_DEVICE_ID --transport stdio
 
 # 或使用 Python 模块
-python -m mcp_memobird --ak YOUR_MEMOBIRD_AK --did YOUR_DEVICE_ID --transport stdio
+python -m src.run --ak YOUR_MEMOBIRD_AK --did YOUR_DEVICE_ID --transport stdio
 
 # 或使用环境变量
 export MEMOBIRD_AK=YOUR_MEMOBIRD_AK
@@ -78,7 +82,7 @@ mcp-memobird --transport sse --port 8000
 2. **打印图片**
    ```python
    # 本地图片
-   print_image("/path/to/image.jpg)
+   print_image("/path/to/image.jpg")
    
    # 或 base64 编码图片（带前缀）
    print_image("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...")
@@ -105,9 +109,12 @@ mcp-memobird --transport sse --port 8000
 如果您想为项目做贡献，可以按以下步骤设置开发环境：
 
 ```bash
-git clone https://github.com/your-username/mcp-memobird.git
+git clone https://github.com/DrayChou/mcp-memobird.git
 cd mcp-memobird
-uv pip install -e ".[dev]"  # 安装项目和开发依赖
+# 安装开发依赖
+uv pip install -e ".[dev]"
+# 或使用传统 pip
+pip install -e ".[dev]"
 ```
 
 ## 项目结构
@@ -116,15 +123,26 @@ uv pip install -e ".[dev]"  # 安装项目和开发依赖
 mcp-memobird/
 ├── pyproject.toml      # 项目配置、依赖和构建信息
 ├── README.md           # 项目文档
-├── mcp_memobird/       # 包目录
-│   ├── __init__.py     # 包初始化文件
-│   ├── client.py       # 咕咕机客户端实现
-│   └── main.py         # 主程序和服务器实现
+├── requirements.txt    # 项目依赖
+├── src/                # 源代码目录
+│   ├── config.py       # 配置文件
+│   ├── run.py          # 主程序和服务器实现
+│   └── libs/           # 库目录
+│       └── client.py   # 咕咕机客户端实现
 ```
+
+## 配置说明
+
+配置文件 `src/config.py` 中包含以下可配置项：
+
+- 服务器配置：服务名称和默认端口
+- API 配置：API 基础 URL 和请求超时时间
+- 图像处理配置：最大图像宽度
+- 日志配置：日志级别和格式
 
 ## 依赖
 
-- [mcp](https://github.com/microsoft/mcp) - Model Context Protocol
+- [fastmcp](https://github.com/microsoft/mcp) - 快速 MCP 实现
 - Pillow - 图像处理
 - requests - HTTP 客户端
 - starlette/uvicorn - 用于 SSE 模式
