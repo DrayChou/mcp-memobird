@@ -1,5 +1,6 @@
 import base64
 import logging
+import sys
 from datetime import datetime
 from io import BytesIO
 from typing import List, Tuple, Union, Optional, Any
@@ -8,11 +9,43 @@ import requests
 from PIL import Image, UnidentifiedImageError
 
 # 导入配置
-from src.config import MEMOBIRD_API_BASE_URL, DEFAULT_REQUEST_TIMEOUT, IMAGE_MAX_WIDTH, LOG_LEVEL, LOG_FORMAT
+try:
+    # 相对导入 - 当作为模块运行时
+    from .config import (
+        MEMOBIRD_API_BASE_URL,
+        DEFAULT_REQUEST_TIMEOUT,
+        IMAGE_MAX_WIDTH,
+        LOG_LEVEL,
+        LOG_FORMAT,
+    )
+except (ImportError, ValueError):
+    try:
+        # 直接导入 - 当在src目录内运行时
+        from config import (
+            MEMOBIRD_API_BASE_URL,
+            DEFAULT_REQUEST_TIMEOUT,
+            IMAGE_MAX_WIDTH,
+            LOG_LEVEL,
+            LOG_FORMAT,
+        )
+    except ImportError:
+        try:
+            # 包导入 - 当作为已安装的包运行时
+            from src.config import (
+                MEMOBIRD_API_BASE_URL,
+                DEFAULT_REQUEST_TIMEOUT,
+                IMAGE_MAX_WIDTH,
+                LOG_LEVEL,
+                LOG_FORMAT,
+            )
+        except ImportError:
+            logging.error("Error: memobird modules not found or missing dependencies.")
+            sys.exit(1)
 
 # 设置日志
 logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 log = logging.getLogger(__name__)
+
 
 # --- 辅助函数 ---
 def _current_timestamp() -> str:
@@ -23,25 +56,33 @@ def _current_timestamp() -> str:
 # --- 自定义异常 ---
 class MemobirdError(Exception):
     """Memobird客户端错误的基类"""
+
     pass
 
 
 class ApiError(MemobirdError):
     """API错误"""
-    def __init__(self, res_code: int, res_error: str, status_code: Optional[int] = None):
+
+    def __init__(
+        self, res_code: int, res_error: str, status_code: Optional[int] = None
+    ):
         self.res_code = res_code
         self.res_error = res_error
         self.status_code = status_code
-        super().__init__(f"API Error (HTTP Status: {status_code}, API Code: {res_code}): {res_error}")
+        super().__init__(
+            f"API Error (HTTP Status: {status_code}, API Code: {res_code}): {res_error}"
+        )
 
 
 class NetworkError(MemobirdError):
     """网络相关错误"""
+
     pass
 
 
 class ContentError(MemobirdError):
     """内容处理错误"""
+
     pass
 
 
@@ -114,8 +155,12 @@ class PrintPayloadBuilder:
             width, height = image.size
             if width > IMAGE_MAX_WIDTH:
                 new_height = int(height * IMAGE_MAX_WIDTH / width)
-                log.info(f"Resizing image from {width}x{height} to {IMAGE_MAX_WIDTH}x{new_height}")
-                image = image.resize((IMAGE_MAX_WIDTH, new_height), Image.Resampling.LANCZOS)
+                log.info(
+                    f"Resizing image from {width}x{height} to {IMAGE_MAX_WIDTH}x{new_height}"
+                )
+                image = image.resize(
+                    (IMAGE_MAX_WIDTH, new_height), Image.Resampling.LANCZOS
+                )
 
             # 转换为1位黑白
             image = image.convert("1")
@@ -131,7 +176,9 @@ class PrintPayloadBuilder:
         except FileNotFoundError as e:
             raise ContentError(f"Image file not found: {image_source}") from e
         except UnidentifiedImageError as e:
-            raise ContentError(f"Cannot identify image file: {e}. Source: {image_source}") from e
+            raise ContentError(
+                f"Cannot identify image file: {e}. Source: {image_source}"
+            ) from e
         except Exception as e:
             # 捕获其他PIL/IO错误
             raise ContentError(f"Error processing image: {e}") from e
@@ -151,14 +198,18 @@ class PrintPayloadBuilder:
                     if index < num_parts - 1 and not text_data.endswith("\n"):
                         text_data += "\n"
                     # 使用GBK编码文本（API要求）
-                    encoded_data = base64.b64encode(text_data.encode("GBK", errors="ignore")).decode("ascii")
+                    encoded_data = base64.b64encode(
+                        text_data.encode("GBK", errors="ignore")
+                    ).decode("ascii")
                     encoded_parts.append(f"T:{encoded_data}")
                 elif content_type == "P":
                     # 编码图像BMP字节
                     encoded_data = base64.b64encode(data).decode("ascii")
                     encoded_parts.append(f"P:{encoded_data}")
             except Exception as e:
-                log.error(f"Error encoding part (Type: {content_type}): {e}. Skipping part.")
+                log.error(
+                    f"Error encoding part (Type: {content_type}): {e}. Skipping part."
+                )
 
         payload = "|".join(encoded_parts)
         log.debug(f"Built payload string (length: {len(payload)}): {payload[:50]}...")
@@ -181,11 +232,19 @@ class MemobirdApiClient:
         }
         log.info("MemobirdApiClient initialized.")
 
-    def _make_request(self, method: str, path: str, params: Optional[dict] = None,
-                     json_data: Optional[dict] = None, timeout: int = DEFAULT_REQUEST_TIMEOUT) -> dict:
+    def _make_request(
+        self,
+        method: str,
+        path: str,
+        params: Optional[dict] = None,
+        json_data: Optional[dict] = None,
+        timeout: int = DEFAULT_REQUEST_TIMEOUT,
+    ) -> dict:
         """向Memobird API发出HTTP请求并处理响应"""
         url = MEMOBIRD_API_BASE_URL + path
-        log.debug(f"Making {method} request to {url} with params={params}, json={json_data}")
+        log.debug(
+            f"Making {method} request to {url} with params={params}, json={json_data}"
+        )
         try:
             resp = self._session.request(
                 method=method,
@@ -221,7 +280,9 @@ class MemobirdApiClient:
         log.info(f"Obtained user ID: {user_id}")
         return user_id
 
-    def print_content(self, device_id: str, user_id: str, payload: PrintPayloadBuilder) -> int:
+    def print_content(
+        self, device_id: str, user_id: str, payload: PrintPayloadBuilder
+    ) -> int:
         """将内容有效载荷发送到打印机API"""
         path = "/printpaper"
         content_string = payload.build()
@@ -237,7 +298,9 @@ class MemobirdApiClient:
             "userID": user_id,
         }
         log.info(f"Sending content to device {device_id} (User: {user_id})...")
-        api_data = self._make_request("POST", path, json_data=json_data, timeout=20)  # 打印时超时更长
+        api_data = self._make_request(
+            "POST", path, json_data=json_data, timeout=20
+        )  # 打印时超时更长
         content_id = api_data.get("printcontentid")
         if content_id is None:
             raise ApiError(
@@ -258,7 +321,9 @@ class MemobirdApiClient:
             "userID": user_id,
         }
         log.info(f"Sending URL {url} to device {device_id} (User: {user_id})...")
-        api_data = self._make_request("POST", path, json_data=json_data, timeout=30)  # URL打印时超时更长
+        api_data = self._make_request(
+            "POST", path, json_data=json_data, timeout=30
+        )  # URL打印时超时更长
         content_id = api_data.get("printcontentid")
         if content_id is None:
             raise ApiError(
@@ -279,7 +344,9 @@ class MemobirdApiClient:
         log.info(f"Checking print status for Content ID: {content_id}...")
         api_data = self._make_request("GET", path, params=params)
         is_printed = api_data.get("printflag") == 1
-        log.info(f"Print status for {content_id}: {'Printed' if is_printed else 'Not Printed/Pending'}")
+        log.info(
+            f"Print status for {content_id}: {'Printed' if is_printed else 'Not Printed/Pending'}"
+        )
         return is_printed
 
 

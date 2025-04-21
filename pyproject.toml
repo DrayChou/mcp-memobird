@@ -23,7 +23,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "fastmcp>=0.4.2",
+    "fastmcp>=2.2.0",
     "Pillow>=10.0.0",
     "requests>=2.30.0",
     "numpy>=1.24.0",
@@ -41,10 +41,10 @@ dev = [
 ]
 
 [project.scripts]
-mcp-memobird = "src.run:main"
+mcp-memobird = "run:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src", "."]
 
 [tool.black]
 line-length = 88
