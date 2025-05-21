@@ -1,0 +1,5 @@
+sseclient-py
+requests # Already a main dependency, but good to list for clarity if tests use it directly
+Pillow # Already a main dependency
+# Add other testing-specific dependencies here, e.g., pytest, coverage
+# For now, only sseclient-py is strictly new for testing purposes.

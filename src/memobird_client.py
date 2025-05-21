@@ -239,11 +239,12 @@ class MemobirdApiClient:
         params: Optional[dict] = None,
         json_data: Optional[dict] = None,
         timeout: int = DEFAULT_REQUEST_TIMEOUT,
-    ) -> dict:
+        stream: bool = False,  # 新增 stream 参数
+    ) -> Union[dict, requests.Response]:  # 返回类型可以是 dict 或 Response
         """向Memobird API发出HTTP请求并处理响应"""
         url = MEMOBIRD_API_BASE_URL + path
         log.debug(
-            f"Making {method} request to {url} with params={params}, json={json_data}"
+            f"Making {method} request to {url} with params={params}, json={json_data}, stream={stream}"
         )
         try:
             resp = self._session.request(
@@ -253,10 +254,27 @@ class MemobirdApiClient:
                 json=json_data,
                 headers=self._headers,
                 timeout=timeout,
+                stream=stream,  # 将 stream 参数传递给 requests
             )
-            return _check_api_response(resp)  # 成功时返回JSON数据
+            if stream:
+                # 对于流式请求，进行初步的HTTP错误检查，然后直接返回响应对象
+                # 调用者负责处理内容和关闭响应
+                resp.raise_for_status()  # 检查HTTP错误
+                return resp
+
+            return _check_api_response(resp)  # 对于非流式请求，按原样处理
         except MemobirdError:  # 重新抛出我们的特定错误
             raise
+        except requests.exceptions.HTTPError as e:
+            # 对于流式请求，如果 raise_for_status 失败，则捕获并作为 NetworkError 引发
+            # 对于非流式请求，_check_api_response 内部已处理
+            response_text = ""
+            if e.response is not None:
+                try:
+                    response_text = f" Response: {e.response.text[:200]}..."
+                except Exception:
+                    pass
+            raise NetworkError(f"HTTP Error: {e}.{response_text}") from e
         except Exception as e:  # 捕获请求期间的意外错误
             raise NetworkError(f"Unexpected error during API request: {e}") from e
 
